@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 
 	"golang.org/x/tools/go/analysis"
@@ -35,19 +36,21 @@ func run(pass *analysis.Pass) (any, error) {
 			return
 		}
 
+		fmt.Println(selectorExpr)
+
 		if selectorExpr.Sel == nil || selectorExpr.Sel.Name != "WithinTransaction" {
 			return
 		}
 
-		selectorIdent, ok := selectorExpr.X.(*ast.Ident)
-		if !ok {
-			return
-		}
+		// selectorIdent, ok := selectorExpr.X.(*ast.Ident)
+		// if !ok {
+		// 	return
+		// }
 
-		// TODO: check if this change when renaming the import
-		if selectorIdent.Name != "transactor" {
-			return
-		}
+		// // // TODO: check if this change when renaming the import
+		// if selectorIdent.Name != "transactor" {
+		// 	return
+		// }
 
 		if len(callExpr.Args) != 2 {
 			return

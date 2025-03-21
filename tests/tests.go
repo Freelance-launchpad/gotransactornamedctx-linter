@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/Thiht/transactor"
 	stdlibTransactor "github.com/Thiht/transactor/stdlib"
 )
 
@@ -30,11 +31,16 @@ func nok() {
 
 	db, _ := sql.Open("pgx", "aaa")
 
-	transactor, _ := stdlibTransactor.NewTransactor(
+	t, _ := stdlibTransactor.NewTransactor(
 		db,
 		stdlibTransactor.NestedTransactionsSavepoints,
 	)
-	if err := transactor.WithinTransaction(ctx, func(context.Context) error {
+	a := struct {
+		transactor transactor.Transactor
+	}{
+		transactor: t,
+	}
+	if err := a.transactor.WithinTransaction(ctx, func(context.Context) error {
 		return nil
 	}); err != nil {
 		panic(err)
