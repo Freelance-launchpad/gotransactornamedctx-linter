@@ -1,4 +1,4 @@
-module github.com/theo303/linter-test
+module github.com/Freelance-launchpad/gotransactornamedctx-linter
 
 go 1.24.1
 
