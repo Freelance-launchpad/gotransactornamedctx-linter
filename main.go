@@ -1,84 +1,73 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
-	"go/parser"
-	"go/token"
-	"log"
-	"os"
+
+	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/singlechecker"
 )
 
 func main() {
-	v := visitor{fset: token.NewFileSet()}
-	for _, filePath := range os.Args[1:] {
-		if filePath == "--" {
-			continue
-		}
-
-		f, err := parser.ParseFile(v.fset, filePath, nil, 0)
-		if err != nil {
-			log.Fatalf("Failed to parse file %s: %s", filePath, err)
-		}
-
-		ast.Walk(&v, f)
-	}
+	singlechecker.Main(Analyzer)
 }
 
-type visitor struct {
-	fset *token.FileSet
+var Analyzer = &analysis.Analyzer{
+	Name: "gotransactornamedctx",
+	Doc:  "Checks that transactor.WithinTransaction has a named context parameter.",
+	Run:  run,
 }
 
-func (v *visitor) Visit(node ast.Node) ast.Visitor {
-	if node == nil {
-		return nil
-	}
+func run(pass *analysis.Pass) (any, error) {
+	inspect := func(node ast.Node) bool {
+		callExpr, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
 
-	callExpr, ok := node.(*ast.CallExpr)
-	if !ok {
-		return v
-	}
+		selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
 
-	selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
-	if !ok {
-		return v
-	}
+		if selectorExpr.Sel == nil || selectorExpr.Sel.Name != "WithinTransaction" {
+			return true
+		}
 
-	if selectorExpr.Sel == nil || selectorExpr.Sel.Name != "WithinTransaction" {
-		return v
-	}
+		selectorIdent, ok := selectorExpr.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
 
-	selectorIdent, ok := selectorExpr.X.(*ast.Ident)
-	if !ok {
-		return v
-	}
+		// TODO: check if this change when renaming the import
+		if selectorIdent.Name != "transactor" {
+			return true
+		}
 
-	// TODO: check if this change when renaming the import
-	if selectorIdent.Name != "transactor" {
-		return v
-	}
+		if len(callExpr.Args) != 2 {
+			return true
+		}
 
-	if len(callExpr.Args) != 2 {
-		return v
-	}
+		funcLit, ok := callExpr.Args[1].(*ast.FuncLit)
+		if !ok {
+			return true
+		}
 
-	funcLit, ok := callExpr.Args[1].(*ast.FuncLit)
-	if !ok {
-		return v
-	}
+		if funcLit.Type == nil || funcLit.Type.Params == nil || len(funcLit.Type.Params.List) == 0 {
+			return true
+		}
 
-	if funcLit.Type == nil || funcLit.Type.Params == nil || len(funcLit.Type.Params.List) == 0 {
-		return v
-	}
+		field := funcLit.Type.Params.List[0]
+		if field == nil {
+			return true
+		}
 
-	field := funcLit.Type.Params.List[0]
-	if field == nil {
-		return v
+		if len(field.Names) == 0 {
+			pass.Reportf(node.Pos(), "transactor function has unnamed context parameter\n")
+		}
+		return true
 	}
-
-	if len(field.Names) == 0 {
-		fmt.Printf("%s: transactor function has unnamed context parameter\n", v.fset.Position(node.Pos()))
+	for _, f := range pass.Files {
+		ast.Inspect(f, inspect)
 	}
-
-	return v
+	return nil, nil
 }
